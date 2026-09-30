@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -128,6 +128,7 @@ harness_marker() {
     echo omp
     return
   fi
+  [ "${ANTIGRAVITY_AGENT:-}" = "1" ] && { echo agy; return; }
   [ "${CLAUDECODE:-}" = "1" ] && { echo claude; return; }
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
@@ -143,6 +144,19 @@ harness_marker() {
   # identified, and any rule that must be RELIABLE under grok has to test the hook
   # markers too (see .claude/settings.json Stop entries, docs/turnend-guard.md).
   [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
+  # commandcode (Command Code Desktop) publishes COMMANDCODE_SCRATCHPAD to every
+  # tool subprocess (verified live, Command Code Desktop 1.72.4 on Windows: a
+  # shell-tool child carries COMMANDCODE_SCRATCHPAD and COMMAND_CODE_RIPGREP_PATH,
+  # and hook processes carry COMMANDCODE_PROJECT_DIR/COMMANDCODE_SESSION_ID/
+  # COMMANDCODE_HOOK_EVENT). It is deliberately tested AFTER every other marker:
+  # that desktop-app environment is inherited by every worker this home spawns,
+  # exactly like CLAUDECODE, so a worker's own marker must decide first, and
+  # bin/fm-spawn.sh clears the variable at each worker launch boundary as
+  # defense in depth. Command Code neither publishes nor scrubs CLAUDECODE, so a
+  # Command Code session nested under another harness still resolves through
+  # that harness's own marker here and through the structural ancestor in
+  # detect_own.
+  [ -n "${COMMANDCODE_SCRATCHPAD:-}" ] && { echo commandcode; return; }
   # codex, opencode, kimi, muse, agy, and devin publish no harness-identity marker at all, so
   # they are never named here and are identified by ancestry alone. That is the
   # whole reason a foreign marker must not outrank ancestry: with markers winning
@@ -237,7 +251,19 @@ harness_process_verdict() {  # <pid>
     # carries no AGY_* or ANTIGRAVITY_* variable; AGENT=1 seen there is an
     # inherited launcher value, not an agy identity), so like muse it is
     # detected by ancestry alone.
-    agy) echo "comm agy"; return ;;
+    agy|agy.exe|[Aa]ntigravity|[Aa]ntigravity.exe) echo "comm agy"; return ;;
+    language_server|language_server.exe)
+      case "$args" in
+        *[Aa]ntigravity*|*antigravity*) echo "comm agy"; return ;;
+      esac
+      ;;
+    # Command Code Desktop's app process name is exactly `Command Code`
+    # (verified live, Command Code Desktop 1.72.4 on Windows: the native
+    # process table reports "Command Code.exe", the direct parent of a
+    # tool-call shell). Anchored with explicit case and .exe forms, never a
+    # loose *command* glob, so ordinary cmd shells and command-shaped names
+    # are not misread as this harness.
+    [Cc]ommand\ [Cc]ode|[Cc]ommand\ [Cc]ode.exe) echo "comm commandcode"; return ;;
     devin) echo "comm devin"; return ;;
     node*|python*)
       # Bare interpreter: match the harness name in its script path.

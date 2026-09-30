@@ -286,6 +286,14 @@ fm_backend_validate() {  # <name>
 fm_backend_validate_spawn() {  # <name>
   local name=$1
   fm_backend_validate "$name" || return 1
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if [ "$name" = tmux ]; then
+        echo "error: backend 'tmux' cannot spawn windows on Windows (MSYS/MinGW); use 'herdr'" >&2
+        return 1
+      fi
+      ;;
+  esac
   fm_backend_list_contains "$FM_BACKEND_SPAWN" "$name" && return 0
   echo "error: backend '$name' does not support task spawning yet (spawn-supported: $FM_BACKEND_SPAWN)" >&2
   return 1

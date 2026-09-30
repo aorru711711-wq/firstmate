@@ -2048,7 +2048,7 @@ launch_template() {
   # naming them with -e as well loads each twice (verified), doubling every
   # session_stop continuation.
   omp)
-    printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 __OMPBIN__ --config __OMPWORKERCFG__ --auto-approve --cwd __WORKTREE__'
+    printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u COMMANDCODE_SCRATCHPAD FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 __OMPBIN__ --config __OMPWORKERCFG__ --auto-approve --cwd __WORKTREE__'
     if [ "$kind" = secondmate ]; then
       printf '%s' ' __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
     else
@@ -2099,7 +2099,7 @@ launch_template() {
   # inherited CLAUDECODE cannot outrank cursor's own marker in a process that
   # only reads the environment. Cursor exposes no effort flag, so the shared
   # effort axis is deliberately omitted and stays in task metadata only.
-  cursor) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_INVOKED_AS __CURSORBIN__ --trust --yolo __MODELFLAG__--workspace __WORKTREE__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  cursor) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_INVOKED_AS -u COMMANDCODE_SCRATCHPAD __CURSORBIN__ --trust --yolo __MODELFLAG__--workspace __WORKTREE__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
   # gemini (Google Gemini CLI): a positional query starts the supervised
   # interactive session and auto-submits it, so the brief rides the launch
   # command exactly as it does for claude and grok (verified: a multi-line
@@ -4302,6 +4302,26 @@ fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
   freshen_spawn_worktree_base "$WT" || exit 1
 fi
+if [ "$KIND" != secondmate ]; then
+  case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*)
+    for _f in "$WT/.pi/extensions/lib/"*.ts; do
+      [ -f "$_f" ] || continue
+      if [ "$(wc -l < "$_f" 2>/dev/null || echo 99)" -le 1 ]; then
+        _target=$(cat "$_f" 2>/dev/null || true)
+        case "$_target" in
+        ../*)
+          _dir=$(dirname "$_f")
+          if [ -f "$_dir/$_target" ]; then
+            cp "$_dir/$_target" "$_f" 2>/dev/null || true
+          fi
+          ;;
+        esac
+      fi
+    done
+    ;;
+  esac
+fi
 
 # Re-assert the durable task copy after either treehouse acquisition or endpoint
 # adoption. This also updates Herdr's restored pane shell before any harness is
@@ -5090,7 +5110,7 @@ case "$LAUNCH" in
 esac
 case "$HARNESS" in
 claude | codex | opencode | pi | pi-signed | grok | kimi | gemini | muse | rovo | agy | devin)
-  LAUNCH="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI $LAUNCH"
+  LAUNCH="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI -u COMMANDCODE_SCRATCHPAD $LAUNCH"
   ;;
 esac
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not

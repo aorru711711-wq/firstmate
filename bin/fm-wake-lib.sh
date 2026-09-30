@@ -589,6 +589,21 @@ fm_lock_try_create() {
     fm_lock_discard_owner "$ownerdir"
     return 1
   fi
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      fm_lock_discard_owner "$ownerdir"
+      if mkdir "$lockdir" 2>/dev/null; then
+        local mypid
+        fm_current_pid mypid || { rmdir "$lockdir" 2>/dev/null; return 1; }
+        if { printf '%s\n' "$mypid" > "$lockdir/pid"; } 2>/dev/null; then
+          return 0
+        fi
+        rm -f "$lockdir/pid" 2>/dev/null || true
+        rmdir "$lockdir" 2>/dev/null || true
+      fi
+      return 1
+      ;;
+  esac
   if ! fm_lock_prepare_owner "$ownerdir"; then
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -1149,11 +1164,20 @@ fm_lock_try_acquire() {
     FM_LOCK_OWNER_DIR=
     return 1
   fi
-  if ! fm_lock_points_to_owner "$steal" "$steal_owner"; then
-    fm_lock_release "$steal"
-    FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
-    FM_LOCK_OWNER_DIR=
-    return 1
+  if [ -L "$steal" ]; then
+    if ! fm_lock_points_to_owner "$steal" "$steal_owner"; then
+      fm_lock_release "$steal"
+      FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
+      FM_LOCK_OWNER_DIR=
+      return 1
+    fi
+  else
+    if [ "$(cat "$steal/pid" 2>/dev/null)" != "$current" ]; then
+      fm_lock_release "$steal"
+      FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
+      FM_LOCK_OWNER_DIR=
+      return 1
+    fi
   fi
 
   primary_owner=
