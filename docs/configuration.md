@@ -468,7 +468,7 @@ A backend spawn refusal from a missing dependency, version gate, or unauthentica
 
 ### Task metadata
 
-Task meta records `backend=` only for a non-default backend; an absent `backend=` means the platform default (`tmux` off Windows, `herdr` on Windows), preserving existing default-path meta files.
+Task meta records `backend=` only for a non-default backend; an absent `backend=` is read as `tmux` on every platform, preserving existing default-path meta files, and a herdr spawn (the Windows default included) records the field explicitly.
 
 - Every new task records `endpoint_task_id=` as the cleanup binding between the metadata filename and its opaque runtime endpoint.
 

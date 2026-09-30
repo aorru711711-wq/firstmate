@@ -1568,6 +1568,26 @@ test_windows_lock_keeps_owner_identity() {
     fm_lock_remove_path "$lock" || exit 16
     [ ! -e "$lock" ] || exit 17
     for d in "$lock".owner.*; do [ -e "$d" ] && exit 18; done
+    fm_lock_try_create "$lock" || exit 21
+    fm_lock_release "$lock" || true
+    [ ! -e "$lock" ] || exit 22
+    for d in "$lock".owner.*; do [ -e "$d" ] && exit 23; done
+    # A release must not sweep a contender's owner directory while it is live:
+    # a live foreign owner survives the sweep and a dead one is reaped.
+    live_owner="$lock.owner.live"
+    mkdir -p "$live_owner"
+    sleep 30 & live_pid=$!
+    printf "%s\n" "$live_pid" > "$live_owner/pid"
+    dead_owner="$lock.owner.dead"
+    mkdir -p "$dead_owner"
+    printf "999999\n" > "$dead_owner/pid"
+    mkdir "$lock"
+    printf "%s\n" "$live_pid" > "$lock/pid"
+    fm_lock_discard_owner_siblings "$lock"
+    [ -d "$live_owner" ] || exit 31
+    [ ! -e "$dead_owner" ] || exit 32
+    kill "$live_pid" 2>/dev/null || true
+    rm -rf "$lock" "$live_owner"
     printf ok
   ' "$LIB" "$dir" 2>&1); rc=$?
   [ "$rc" -eq 0 ] || fail "Windows lock owner identity case failed (rc=$rc): $out"

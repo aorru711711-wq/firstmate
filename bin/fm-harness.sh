@@ -13,6 +13,13 @@
 #                                        config/secondmate-harness, or empty when absent.
 #        fm-harness.sh secondmate-effort   print the optional EFFORT token from
 #                                        config/secondmate-harness, or empty when absent.
+#        fm-harness.sh crew-configured     print the harness config/crew-harness names
+#                                        explicitly, or nothing when the choice is
+#                                        absent or "default" (the mirrored-own default).
+#        fm-harness.sh secondmate-configured
+#                                        the same for the secondmate chain:
+#                                        config/secondmate-harness, else config/crew-harness,
+#                                        else nothing.
 #        fm-harness.sh validate-native-effort <harness> <model> <effort>
 #                                        Refuse ultra unless the harness is pi or
 #                                        pi-signed and the model explicitly names
@@ -482,6 +489,25 @@ resolve_crew() {
   if [ -z "$crew" ] || [ "$crew" = "default" ]; then detect_own; else echo "$crew"; fi
 }
 
+# Print the harness config/crew-harness names explicitly, or nothing when the
+# choice is absent or "default" (the mirrored-own default). This is the
+# explicit-choice signal a caller uses to tell authority from a fallback.
+resolve_configured_crew() {
+  local crew=
+  [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
+  case "$crew" in ''|default) return 0 ;; esac
+  printf '%s\n' "$crew"
+}
+
+# Print the explicitly configured secondmate harness: the
+# config/secondmate-harness token when it names one, otherwise whatever
+# config/crew-harness names explicitly, or nothing when neither does.
+resolve_configured_secondmate() {
+  local sm
+  sm=$(secondmate_field 1)
+  case "$sm" in ''|default) resolve_configured_crew ;; *) printf '%s\n' "$sm" ;; esac
+}
+
 # Print the first non-empty, non-comment line of config/secondmate-harness
 # (leading/trailing whitespace trimmed), or nothing when the file is absent or
 # holds only blank/comment lines.
@@ -579,7 +605,9 @@ case "${1:-}" in
     harness_ancestry_descent "$descent_pid" ${1+"$@"}
     ;;
   crew) resolve_crew ;;
+  crew-configured) resolve_configured_crew ;;
   secondmate) resolve_secondmate ;;
+  secondmate-configured) resolve_configured_secondmate ;;
   secondmate-model) resolve_secondmate_model ;;
   secondmate-effort) resolve_secondmate_effort ;;
   *) detect_own ;;

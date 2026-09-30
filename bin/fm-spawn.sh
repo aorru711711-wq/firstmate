@@ -2226,6 +2226,10 @@ case "$ARG3" in
   # kinds: a harness with no template aborts the spawn.
   if [ "$KIND" = secondmate ]; then
     HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+    # The EXPLICIT config choice, empty when the chain only mirrors the
+    # primary's own harness. Only that mirrored default may fall back below: a
+    # harness the operator named is their authority and always stands.
+    configured_harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate-configured)
     harness_src='config/secondmate-harness (falling back to config/crew-harness)'
   else
     if [ -f "$CONFIG/crew-dispatch.json" ]; then
@@ -2233,18 +2237,19 @@ case "$ARG3" in
       exit 1
     fi
     HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
+    configured_harness=$("$FM_ROOT/bin/fm-harness.sh" crew-configured)
     harness_src='config/crew-harness'
   fi
   LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    # A harness with no template cannot launch a worker. A harness named
-    # explicitly by config still refuses, exactly as before. The fallback is
-    # only for the mirrored-own default: absent or "default" resolution copies
-    # the primary's own harness, and a harness firstmate itself runs on (such
-    # as a desktop app with no worker launch path) would otherwise stand every
-    # default spawn down. Report it and fall back only to a verified adapter
-    # whose CLI is actually present.
+    # A harness with no template cannot launch a worker, and an EXPLICITLY
+    # named harness always refuses - that is the operator's choice. The
+    # fallback is only for the mirrored-own default: nothing was configured, so
+    # resolution copied the primary's own harness, and a harness firstmate
+    # itself runs on (such as a desktop app with no worker launch path) would
+    # otherwise stand every default spawn down. Report it and fall back only to
+    # a verified adapter whose CLI is actually present.
     fallback_harness=
-    if [ "$HARNESS" = "$("$FM_ROOT/bin/fm-harness.sh")" ]; then
+    if [ -z "$configured_harness" ]; then
       for candidate in claude codex pi opencode grok cursor omp; do
         case "$candidate" in
           cursor) candidate_bin=cursor-agent ;;
@@ -4331,32 +4336,11 @@ fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
   freshen_spawn_worktree_base "$WT" || exit 1
 fi
-if [ "$KIND" != secondmate ]; then
-  case "$(uname -s 2>/dev/null)" in
-  MINGW*|MSYS*|CYGWIN*)
-    for _f in "$WT/.pi/extensions/lib/"*.ts; do
-      [ -f "$_f" ] || continue
-      if [ "$(wc -l < "$_f" 2>/dev/null || echo 99)" -le 1 ]; then
-        _target=$(cat "$_f" 2>/dev/null || true)
-        case "$_target" in
-        ../*)
-          _dir=$(dirname "$_f")
-          if [ -f "$_dir/$_target" ]; then
-            cp "$_dir/$_target" "$_f" 2>/dev/null || true
-            # The materialized copy is spawn scaffolding, not the worker's work.
-            # Without this index bit git reports the tracked placeholder as
-            # modified, and both the worktree refresh and teardown refuse a
-            # dirty tree. The path stays out of status and out of any worker
-            # commit while the rest of the worktree behaves normally.
-            git -C "$WT" update-index --skip-worktree -- "${_f#"$WT"/}" >/dev/null 2>&1 || true
-          fi
-          ;;
-        esac
-      fi
-    done
-    ;;
-  esac
-fi
+# The former Windows Calm materialization is gone with the imports it served:
+# both shared modules are imported from .claude/mods/firstmate-calm/lib
+# directly, so the tracked symlinks under .pi/extensions/lib are never loaded
+# here and no spawn rewrites tracked files (which used to dirty the worker
+# worktree and trip the refresh and teardown safeguards).
 
 # Re-assert the durable task copy after either treehouse acquisition or endpoint
 # adoption. This also updates Herdr's restored pane shell before any harness is

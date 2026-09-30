@@ -539,11 +539,19 @@ fm_lock_discard_owner() {
 
 # Reap the owner directories beside a real-directory lock. The Windows lock
 # shape has no symlink to read its owner back from, so every removal path has
-# to clear the siblings itself.
+# to clear the siblings itself. A directory another LIVE process owns is left
+# alone: a contender prepares its owner before it can create the lock, and
+# sweeping that contender's directory made it lose an attempt on a lock that
+# had just become free.
 fm_lock_discard_owner_siblings() {  # <lockdir>
-  local lockdir=$1 ownerdir
+  local lockdir=$1 ownerdir owner_pid me
+  fm_current_pid me || true
   for ownerdir in "$lockdir".owner.*; do
     [ -e "$ownerdir" ] || continue
+    owner_pid=$(cat "$ownerdir/pid" 2>/dev/null || true)
+    if [ -n "$owner_pid" ] && [ "$owner_pid" != "$me" ] && fm_pid_alive "$owner_pid"; then
+      continue
+    fi
     fm_lock_discard_owner "$ownerdir"
   done
 }
@@ -603,21 +611,23 @@ fm_lock_try_create() {
   case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*)
       # MSYS symlinks need privileges the fleet cannot assume, so the lock is a
-      # real directory with its pid inside. The owner directory is still
-      # prepared and exported: fm-procevent requires FM_LOCK_OWNER_DIR for the
-      # extension lifecycle, and the extension host validates the
-      # "<lock>.owner.<suffix>" sibling shape, so skipping it here left every
-      # Windows session without a lock identity.
-      if mkdir "$lockdir" 2>/dev/null; then
-        local mypid
-        if fm_current_pid mypid \
-          && fm_lock_prepare_owner "$ownerdir" \
-          && { printf '%s\n' "$mypid" > "$lockdir/pid"; } 2>/dev/null; then
-          FM_LOCK_OWNER_DIR=$ownerdir
-          return 0
+      # real directory with its pid inside. The owner directory is prepared and
+      # exported FIRST: fm-procevent requires FM_LOCK_OWNER_DIR for the
+      # extension lifecycle, the extension host validates the
+      # "<lock>.owner.<suffix>" sibling shape, and preparing before the lock
+      # keeps a concurrent release from sweeping a contender's not-yet-owned
+      # directory (fm_lock_discard_owner_siblings skips live owners).
+      if fm_lock_prepare_owner "$ownerdir"; then
+        if mkdir "$lockdir" 2>/dev/null; then
+          local mypid
+          fm_current_pid mypid || mypid=$(cat "$ownerdir/pid" 2>/dev/null || true)
+          if [ -n "$mypid" ] && { printf '%s\n' "$mypid" > "$lockdir/pid"; } 2>/dev/null; then
+            FM_LOCK_OWNER_DIR=$ownerdir
+            return 0
+          fi
+          rm -f "$lockdir/pid" 2>/dev/null || true
+          rmdir "$lockdir" 2>/dev/null || true
         fi
-        rm -f "$lockdir/pid" 2>/dev/null || true
-        rmdir "$lockdir" 2>/dev/null || true
       fi
       fm_lock_discard_owner "$ownerdir"
       return 1
