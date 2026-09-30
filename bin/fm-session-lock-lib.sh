@@ -168,7 +168,7 @@ fm_harness_process_matches() {  # <comm> <args>
 # checks keep that substitute safe.
 fm_windows_pwsh_program() {
   local candidate
-  for candidate in pwsh pwsh.exe; do
+  for candidate in powershell.exe pwsh pwsh.exe; do
     if command -v "$candidate" >/dev/null 2>&1; then
       printf '%s\n' "$candidate"
       return 0
@@ -179,7 +179,7 @@ fm_windows_pwsh_program() {
 
 fm_windows_process_ancestry_records() {
   local pids=() p wp winpid records pwsh_program
-  command -v powershell.exe >/dev/null 2>&1 || return 1
+  pwsh_program=$(fm_windows_pwsh_program) || return 1
   p=$$
   while [ -n "$p" ] && [ "$p" -gt 1 ]; do
     wp=$(cat "/proc/$p/winpid" 2>/dev/null || true)
@@ -194,7 +194,7 @@ fm_windows_process_ancestry_records() {
     case "$winpid" in ''|*[!0-9]*) return 1 ;; esac
     pids=("$winpid")
   fi
-  records=$(FM_WINDOWS_PROCESS_PIDS="${pids[*]}" powershell.exe -NoLogo -NoProfile -NonInteractive -Command '
+  records=$(FM_WINDOWS_PROCESS_PIDS="${pids[*]}" "$pwsh_program" -NoLogo -NoProfile -NonInteractive -Command '
     $ErrorActionPreference = "SilentlyContinue"
     $all = Get-CimInstance Win32_Process
     $byId = @{}
@@ -260,8 +260,8 @@ fm_windows_process_ancestry_records() {
 
 fm_windows_process_record() {  # <windows-pid> -> pid|ppid|name|base64-command-line
   local pid=$1 records pwsh_program
-  command -v powershell.exe >/dev/null 2>&1 || return 1
-  records=$(FM_WINDOWS_PROCESS_PID="$pid" powershell.exe -NoLogo -NoProfile -NonInteractive -Command '
+  pwsh_program=$(fm_windows_pwsh_program) || return 1
+  records=$(FM_WINDOWS_PROCESS_PID="$pid" "$pwsh_program" -NoLogo -NoProfile -NonInteractive -Command '
     $ErrorActionPreference = "SilentlyContinue"
     $p = Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f [int]$env:FM_WINDOWS_PROCESS_PID)
     if ($p) {
