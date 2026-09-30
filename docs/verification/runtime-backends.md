@@ -111,7 +111,8 @@ The run did not reach `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, or `muse`, 
 
 Command Code Desktop 1.72.4 was verified as a primary on Windows through the exact process name `Command Code`.
 The session-lock ancestry regression covered the primary process, `Command Code Helper.exe`, ordinary shells, and argv text containing `Command Code`, and the suite completed 22/22.
-Only the exact process-name anchor can claim this harness; inherited environment markers, executable path components, and argv text are deliberately insufficient because the desktop environment reaches child processes.
+Only the exact process-name anchor can claim the session lock; executable path components and argv text are deliberately insufficient because the desktop environment reaches child processes.
+The inherited `COMMANDCODE_SCRATCHPAD` marker identifies the primary in detection only - it never anchors the lock - and `bin/fm-spawn.sh` clears it at each worker launch boundary.
 The primary remains on the unknown-harness supervision fallback because no Command Code watcher wake adapter or turn-end hook is verified.
 
 The Windows ancestry reader uses CIM first and PowerShell 7 `Get-Process` as its fallback, including recognition of the bundled Pi runtime by its exact `pi-node` path component.

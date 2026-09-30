@@ -135,7 +135,6 @@ harness_marker() {
     echo omp
     return
   fi
-  [ "${ANTIGRAVITY_AGENT:-}" = "1" ] && { echo agy; return; }
   [ "${CLAUDECODE:-}" = "1" ] && { echo claude; return; }
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
@@ -164,7 +163,15 @@ harness_marker() {
   # that harness's own marker here and through the structural ancestor in
   # detect_own.
   [ -n "${COMMANDCODE_SCRATCHPAD:-}" ] && { echo commandcode; return; }
-  # codex, opencode, kimi, muse, agy, and devin publish no harness-identity marker at all, so
+  # The agy CLI publishes no harness-identity marker of its own (see the
+  # markerless note below). The Antigravity desktop app exports
+  # ANTIGRAVITY_AGENT=1 to its tool children, so it is tested after every
+  # harness's own marker for the same reason as commandcode above: a session
+  # running inside that desktop app inherits the environment, and a worker's
+  # own marker must decide first. detect_own's ancestry layer settles any
+  # disagreement between the two.
+  [ "${ANTIGRAVITY_AGENT:-}" = "1" ] && { echo agy; return; }
+  # codex, opencode, kimi, muse, and devin publish no harness-identity marker at all, so
   # they are never named here and are identified by ancestry alone. That is the
   # whole reason a foreign marker must not outrank ancestry: with markers winning
   # unconditionally, any retained CLAUDECODE would silently rename one of them.
