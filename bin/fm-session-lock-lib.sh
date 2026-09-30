@@ -30,15 +30,15 @@ unset _FM_SESSION_LOCK_LIB_DIR
 # Command Code Desktop is anchored the same way and carries a literal space in
 # its process name (verified live, Command Code Desktop 1.72.4 on Windows: the
 # native process table reports "Command Code.exe" for the app process whose pid
-# is the direct parent of a tool-call shell), so the anchored pattern also keeps
-# ordinary `cmd` shells and command-shaped names from claiming the lock.
+# is the direct parent of a tool-call shell). Its path and argv evidence are
+# deliberately excluded, so only that exact process name can claim the lock.
 FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi(\.exe)?$|^pi-signed(\.exe)?$|^omp(\.exe)?$|^agy(\.exe)?$|^antigravity(\.exe)?$|^[Cc]ommand [Cc]ode(\.exe)?$'
 
 # The same harnesses as exact executable names. Keep in sync with
 # FM_HARNESS_RE. Used only for the stricter path evidence below, where the
 # loose regex would also match ordinary firstmate paths such as
 # bin/fm-claude-stop-autoarm.sh.
-FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi omp agy antigravity "Command Code")
+FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi omp agy antigravity)
 
 # Print the exact harness name carried by executable path $1 - its own basename
 # or any directory component - or return 1.
