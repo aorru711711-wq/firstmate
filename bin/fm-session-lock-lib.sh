@@ -111,6 +111,14 @@ fm_harness_process_matches() {  # <comm> <args>
           if printf '%s' "$args" | tr '\\' '/' | grep -Fqi '/@earendil-works/pi-coding-agent/dist/bundle/cli.js'; then
             return 0
           fi
+          # Pi's native Windows install runs its own bundled runtime from
+          # %LOCALAPPDATA%\pi-node\current, and the Get-Process fallback below
+          # carries only that executable path. Matching the exact path
+          # component keeps the substitution safe: it identifies Pi's engine
+          # without trusting an arbitrary node path.
+          if printf '%s' "$argv0" | tr '\\' '/' | grep -Fq '/pi-node/'; then
+            return 0
+          fi
           ;;
       esac
       if printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"; then

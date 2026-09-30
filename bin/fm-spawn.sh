@@ -2236,8 +2236,37 @@ case "$ARG3" in
     harness_src='config/crew-harness'
   fi
   LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
-    exit 1
+    # A harness with no template cannot launch a worker. A harness named
+    # explicitly by config still refuses, exactly as before. The fallback is
+    # only for the mirrored-own default: absent or "default" resolution copies
+    # the primary's own harness, and a harness firstmate itself runs on (such
+    # as a desktop app with no worker launch path) would otherwise stand every
+    # default spawn down. Report it and fall back only to a verified adapter
+    # whose CLI is actually present.
+    fallback_harness=
+    if [ "$HARNESS" = "$("$FM_ROOT/bin/fm-harness.sh")" ]; then
+      for candidate in claude codex pi opencode grok cursor omp; do
+        case "$candidate" in
+          cursor) candidate_bin=cursor-agent ;;
+          *) candidate_bin=$candidate ;;
+        esac
+        command -v "$candidate_bin" >/dev/null 2>&1 || continue
+        launch_template "$candidate" "$KIND" >/dev/null 2>&1 || continue
+        fallback_harness=$candidate
+        break
+      done
+    fi
+    if [ -n "$fallback_harness" ]; then
+      echo "NOTICE: harness '$HARNESS' (from $harness_src or detection) has no worker launch template; falling back to verified worker adapter '$fallback_harness' for this spawn. Set config/crew-harness to choose explicitly." >&2
+      HARNESS=$fallback_harness
+      LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+        echo "error: no launch template for harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
+        exit 1
+      }
+    else
+      echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    fi
   }
   ;;
 *)
@@ -4314,6 +4343,12 @@ if [ "$KIND" != secondmate ]; then
           _dir=$(dirname "$_f")
           if [ -f "$_dir/$_target" ]; then
             cp "$_dir/$_target" "$_f" 2>/dev/null || true
+            # The materialized copy is spawn scaffolding, not the worker's work.
+            # Without this index bit git reports the tracked placeholder as
+            # modified, and both the worktree refresh and teardown refuse a
+            # dirty tree. The path stays out of status and out of any worker
+            # commit while the rest of the worktree behaves normally.
+            git -C "$WT" update-index --skip-worktree -- "${_f#"$WT"/}" >/dev/null 2>&1 || true
           fi
           ;;
         esac

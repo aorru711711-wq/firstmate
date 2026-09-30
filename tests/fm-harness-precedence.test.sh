@@ -30,7 +30,7 @@ set -u
 # This suite states the markers it means to test in every case. Drop the ambient
 # ones so a verdict never depends on which harness launched the suite.
 unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS \
-  FM_SUPERVISION_ACTOR FM_SUPERVISION_PRIMARY_HARNESS
+  FM_SUPERVISION_ACTOR FM_SUPERVISION_PRIMARY_HARNESS COMMANDCODE_SCRATCHPAD
 
 HARNESS="$ROOT/bin/fm-harness.sh"
 RENDER="$ROOT/bin/fm-supervision-instructions.sh"
@@ -134,6 +134,16 @@ named_bin() {  # <dir> <name>
 # foreign markers that can be retained.
 test_markerless_ancestry_outranks_foreign_marker() {
   local dir fakebin bin got name
+  # The ancestry evidence is the command name ps reports for a process, and a
+  # copied binary carries its new name only where ps reports argv[0]. MSYS
+  # reports the real executable instead, so the markerless-ancestry premise
+  # cannot exist there; the same boundary is covered by CI's Linux/macOS lanes.
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      pass "markerless ancestry skipped (MSYS ps does not report a copied binary's own name)"
+      return 0
+      ;;
+  esac
   dir="$TMP_ROOT/markerless"
   fakebin=$(blind_ancestry_bin "$dir/blind")
   for name in codex opencode kimi muse-bin-0.1.0 agy; do
@@ -180,9 +190,15 @@ test_genuine_marker_and_ancestry_agree() {
   got=$(under_process "$bin" GROK_AGENT=1)
   [ "$got" = grok ] || fail "a genuine grok session resolved '$got', expected grok"
   # grok 1.0.0 hook processes carry no GROK_AGENT at all, so ancestry alone must
-  # still answer for them.
-  got=$(under_process "$bin")
-  [ "$got" = grok ] || fail "an unmarked grok hook process resolved '$got', expected grok"
+  # still answer for them. That premise needs ps to report a copied binary's own
+  # name, which MSYS does not do; CI's Linux/macOS lanes cover it.
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) ;;
+    *)
+      got=$(under_process "$bin")
+      [ "$got" = grok ] || fail "an unmarked grok hook process resolved '$got', expected grok"
+      ;;
+  esac
 
   pass "a harness that publishes a marker inside its own process tree is unchanged"
 }

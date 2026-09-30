@@ -3073,6 +3073,10 @@ fm_backend_herdr_current_path() {  # <target>
   fi
   title=$(printf '%s' "$out" | jq -r '.result.pane.terminal_title_stripped // .result.pane.terminal_title // empty' 2>/dev/null)
   case "$title" in
+    # A bare Windows path ("C:/Users/name/worktree", "C:\Users\name\worktree")
+    # must keep its drive: the prefix-stripping arms below read the colon as a
+    # "<label>: <path>" separator and would drop the drive before cygpath runs.
+    [A-Za-z]:/*|[A-Za-z]:\\*) candidate="$title" ;;
     *:/*) candidate="/${title#*:*/}" ;;
     *:\\[a-zA-Z]*) candidate="${title#*:}" ;;
     /*) candidate="$title" ;;

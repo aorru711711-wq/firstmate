@@ -253,6 +253,11 @@ harness_process_verdict() {  # <pid>
     # detected by ancestry alone.
     agy|agy.exe|[Aa]ntigravity|[Aa]ntigravity.exe) echo "comm agy"; return ;;
     language_server|language_server.exe)
+      # Read the arguments here rather than reusing the interpreter branch's
+      # later read: this arm runs before that assignment, and expanding an
+      # unassigned local under set -u aborted the verdict with "unbound
+      # variable", so the Antigravity evidence could never match.
+      args=$(ps -o args= -p "$pid" 2>/dev/null)
       case "$args" in
         *[Aa]ntigravity*|*antigravity*) echo "comm agy"; return ;;
       esac

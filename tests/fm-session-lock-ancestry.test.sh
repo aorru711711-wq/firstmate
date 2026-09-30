@@ -397,6 +397,47 @@ SH
   pass "session-lock: the Command Code desktop app anchors its own session, and only its exact name does"
 }
 
+test_windows_pi_bundled_runtime_survives_the_pwsh_fallback() {
+  local dir fakebin got
+  dir="$TMP_ROOT/windows-pi-fallback"
+  fakebin=$(fm_fakebin "$dir")
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' MINGW64_NT-test
+SH
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' '  500  1  500  1500  ?  197609  12:00:00 /usr/bin/bash'
+SH
+  # The Get-Process fallback (CIM denied) carries only each process's
+  # executable path, and Pi's native Windows engine is its own bundled runtime
+  # under %LOCALAPPDATA%\pi-node, so that path component is the evidence.
+  cat > "$fakebin/powershell.exe" <<'SH'
+#!/usr/bin/env bash
+enc() { printf '%s' "$1" | base64 | tr -d '\n'; }
+printf '100|50|bash.exe|%s\n' "$(enc 'bash /c/firstmate/bin/fm-session-start.sh')"
+printf '50|0|node.exe|%s\n' "$(enc 'C:\Users\u\AppData\Local\pi-node\current\node.exe')"
+SH
+  chmod +x "$fakebin/uname" "$fakebin/ps" "$fakebin/powershell.exe"
+
+  got=$(PATH="$fakebin:$PATH" lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the path-only fallback walk found no harness for Pi's bundled runtime"
+  [ "$got" = 50 ] || fail "the fallback anchored on '$got', expected the Pi engine pid 50"
+
+  # Any other node path stays unidentified: the component match is exact.
+  cat > "$fakebin/powershell.exe" <<'SH'
+#!/usr/bin/env bash
+enc() { printf '%s' "$1" | base64 | tr -d '\n'; }
+printf '100|50|bash.exe|%s\n' "$(enc 'bash /c/tools/run.sh')"
+printf '50|0|node.exe|%s\n' "$(enc 'C:\tools\mypi-node\current\node.exe')"
+SH
+  chmod +x "$fakebin/powershell.exe"
+  if got=$(PATH="$fakebin:$PATH" lib_eval "$fakebin" 'fm_harness_ancestry_pids'); then
+    fail "an unrelated node path was accepted as Pi ($got)"
+  fi
+  pass "session-lock: Pi's bundled Windows runtime is identified from path-only evidence, and only its exact component"
+}
+
 test_windows_ancestry_falls_back_to_pwsh_when_cim_is_denied() {
   local dir fakebin got
   dir="$TMP_ROOT/windows-pwsh-fallback"
@@ -1404,6 +1445,7 @@ test_windows_pi_node_entrypoint_is_identified_precisely
 test_windows_native_process_ancestry_is_read_without_procps_ps
 test_windows_codex_app_helpers_are_not_harness_anchors
 test_windows_commandcode_app_process_is_identified
+test_windows_pi_bundled_runtime_survives_the_pwsh_fallback
 test_windows_ancestry_falls_back_to_pwsh_when_cim_is_denied
 test_harness_beyond_a_gap_never_owns_the_lock
 test_competing_version_named_session_is_seen_as_live

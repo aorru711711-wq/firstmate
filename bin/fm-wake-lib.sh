@@ -537,6 +537,17 @@ fm_lock_discard_owner() {
   rmdir "$ownerdir" 2>/dev/null || true
 }
 
+# Reap the owner directories beside a real-directory lock. The Windows lock
+# shape has no symlink to read its owner back from, so every removal path has
+# to clear the siblings itself.
+fm_lock_discard_owner_siblings() {  # <lockdir>
+  local lockdir=$1 ownerdir
+  for ownerdir in "$lockdir".owner.*; do
+    [ -e "$ownerdir" ] || continue
+    fm_lock_discard_owner "$ownerdir"
+  done
+}
+
 fm_lock_remove_stray_owner_link() {
   local lockdir=$1 ownerdir=$2 stray
   stray="$lockdir/$(basename "$ownerdir")"
@@ -591,16 +602,24 @@ fm_lock_try_create() {
   fi
   case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*)
-      fm_lock_discard_owner "$ownerdir"
+      # MSYS symlinks need privileges the fleet cannot assume, so the lock is a
+      # real directory with its pid inside. The owner directory is still
+      # prepared and exported: fm-procevent requires FM_LOCK_OWNER_DIR for the
+      # extension lifecycle, and the extension host validates the
+      # "<lock>.owner.<suffix>" sibling shape, so skipping it here left every
+      # Windows session without a lock identity.
       if mkdir "$lockdir" 2>/dev/null; then
         local mypid
-        fm_current_pid mypid || { rmdir "$lockdir" 2>/dev/null; return 1; }
-        if { printf '%s\n' "$mypid" > "$lockdir/pid"; } 2>/dev/null; then
+        if fm_current_pid mypid \
+          && fm_lock_prepare_owner "$ownerdir" \
+          && { printf '%s\n' "$mypid" > "$lockdir/pid"; } 2>/dev/null; then
+          FM_LOCK_OWNER_DIR=$ownerdir
           return 0
         fi
         rm -f "$lockdir/pid" 2>/dev/null || true
         rmdir "$lockdir" 2>/dev/null || true
       fi
+      fm_lock_discard_owner "$ownerdir"
       return 1
       ;;
   esac
@@ -632,6 +651,7 @@ fm_lock_remove_path() {
     return 0
   fi
   fm_lock_clean_known_files "$lockdir"
+  fm_lock_discard_owner_siblings "$lockdir"
   rmdir "$lockdir" 2>/dev/null
 }
 
@@ -1340,6 +1360,7 @@ fm_lock_release() {
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
   [ "$pid" = "$current" ] || return 0
   fm_lock_clean_known_files "$lockdir"
+  fm_lock_discard_owner_siblings "$lockdir"
   rmdir "$lockdir" 2>/dev/null || true
 }
 

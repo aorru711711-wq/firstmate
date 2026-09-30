@@ -270,7 +270,13 @@ fm_backend_name() {
     printf '%s' "$detected"
     return 0
   fi
-  printf 'tmux'
+  # Windows has no spawnable tmux: bin/fm_backend_validate_spawn refuses it, so
+  # an undetected Windows session defaults to herdr rather than surfacing a
+  # tmux default that could never spawn a worker.
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) printf 'herdr' ;;
+    *) printf 'tmux' ;;
+  esac
 }
 
 # fm_backend_validate: refuse an unknown backend LOUDLY. Silent on success.
